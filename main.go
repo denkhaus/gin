@@ -3,11 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-
-	"github.com/codegangsta/cli"
-	"github.com/codegangsta/envy/lib"
-	"github.com/codegangsta/gin/lib"
-
 	"log"
 	"os"
 	"os/signal"
@@ -15,6 +10,10 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/codegangsta/cli"
+	"github.com/codegangsta/envy/lib"
+	"github.com/codegangsta/gin/lib"
 )
 
 var (
@@ -116,7 +115,8 @@ func MainAction(c *cli.Context) {
 	build(builder, runner, logger)
 
 	// scan for changes
-	scanChanges(c.GlobalString("path"), func(path string) {
+	scanChanges(c.GlobalString("path"), func(path string, t time.Time) {
+		logger.Printf("File '%s' was changed at %v. Restart app.", path, t)
 		runner.Kill()
 		build(builder, runner, logger)
 	})
@@ -155,7 +155,7 @@ func build(builder gin.Builder, runner gin.Runner, logger *log.Logger) {
 	time.Sleep(100 * time.Millisecond)
 }
 
-type scanCallback func(path string)
+type scanCallback func(path string, t time.Time)
 
 func scanChanges(watchPath string, cb scanCallback) {
 	for {
@@ -163,15 +163,15 @@ func scanChanges(watchPath string, cb scanCallback) {
 			if path == ".git" {
 				return filepath.SkipDir
 			}
-
 			// ignore hidden files
 			if filepath.Base(path)[0] == '.' {
 				return nil
 			}
 
-            ext := filepath.Ext(path)
-            if ext == ".go" || ext == ".html" || ext == ".tmpl" && info.ModTime().After(startTime) {
-				cb(path)
+			chTime := info.ModTime()
+			ext := filepath.Ext(path)
+			if (ext == ".go" || ext == ".html" || ext == ".tmpl") && chTime.After(startTime) {
+				cb(path, chTime)
 				startTime = time.Now()
 				return errors.New("done")
 			}
